@@ -10,15 +10,15 @@ terraform {
       version = "3.0.1"
     }
   }
-  required_version = ">= 1.1.0"
+  # required_version = ">= 1.1.0"
 
-  cloud {
-    organization = "test-mutt-modo-org"
+  # cloud {
+  #   organization = "test-mutt-modo-org"
 
-    workspaces {
-      name = "gh-actions-demo"
-    }
-  }
+  #   workspaces {
+  #     name = "gh-actions-demo"
+  #   }
+  # }
 }
 
 provider "aws" {
