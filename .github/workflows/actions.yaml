@@ -128,9 +128,15 @@ jobs:
           terraform apply -auto-approve -input=false
           terraform output -json
           terraform output -json > tf_output.json
+          echo $(cat tf_output.json | jq -r .cluster_region.value)
+          echo $(cat tf_output.json | jq -r .cluster_name.value)
+          echo $(cat tf_output.json | jq -r .cluster_env.value)
+          cat tf_output.json
 
       - name: Bootstrap FluxCD
+        if: github.ref == 'refs/heads/master' && github.event_name == 'push' # if: $CI_PIPELINE_SOURCE != "merge_request_event" ; when: manual
         # borro instalacion kubectl, no se usa creo.
         run: |
           curl -s https://fluxcd.io/install.sh | bash
           flux -v
+          
