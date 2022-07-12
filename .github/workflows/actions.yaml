@@ -12,10 +12,7 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   # https://docs.github.com/es/actions/learn-github-actions/environment-variables
   # https://docs.github.com/es/actions/learn-github-actions/contexts
-  PIP_CACHE_DIR: "${{ GITHUB_WORKSPACE }}/.cache/pip" # or ${{ github.workspace }} ?????
-  APK_CACHE_DIR: "${{ GITHUB_WORKSPACE }}/.cache/apk"
-  TF_PLUGIN_CACHE_DIR: "${{ GITHUB_WORKSPACE }}/.cache/terraform"
-  TF_STATE_NAME: "${{ GITHUB_REF }}" # or ${{ github.ref }} ?????
+  TF_STATE_NAME: ${{ github.ref }}
   FLUX_VERSION: "0.26.3"
     
 jobs:
@@ -32,6 +29,8 @@ jobs:
         # en Gitlab-CI no estoy seguro que esten usando lo cacheado 
       - name: Cache APK_CACHE_DIR
         uses: actions/cache@v3
+        env:
+          APK_CACHE_DIR: "${{ GITHUB_WORKSPACE }}/.cache/apk"
         with:
           path: $APK_CACHE_DIR
           key: APK_CACHE_DIR
@@ -51,6 +50,8 @@ jobs:
           sudo mv terraform /usr/local/bin/
       
       - name: Install AWS CLI
+        env:
+          APK_CACHE_DIR: "${{ GITHUB_WORKSPACE }}/.cache/apk"
         run: | 
           mkdir -p $APK_CACHE_DIR
           apk add --cache-dir $APK_CACHE_DIR python3 py3-pip bash
@@ -65,6 +66,7 @@ jobs:
           terraform --version
           echo "${{ env.TF_STATE_NAME }}"
           echo $TF_STATE_NAME
+          echo ${{ GITHUB_REF }}
       
       - name: Terraform Format
         id: fmt
