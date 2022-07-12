@@ -134,14 +134,3 @@ jobs:
           kubectl version --client
           curl -s https://fluxcd.io/install.sh | bash
           flux -v
-          |
-            aws eks --region $(cat ${TF_ROOT}/tf_output.json | jq -r .cluster_region.value) update-kubeconfig \
-              --name $(cat ${TF_ROOT}/tf_output.json | jq -r .cluster_name.value) \
-              --alias eks-cluster
-          |
-            flux bootstrap gitlab  --context=eks-cluster \
-              --owner=$(cat ${TF_ROOT}/tf_output.json | jq -r .flux_git_owner.value) \
-              --repository=$(cat ${TF_ROOT}/tf_output.json | jq -r .flux_git_repo.value) \
-              --branch=$(cat ${TF_ROOT}/tf_output.json | jq -r .flux_git_branch.value) \
-              --path=clusters/$(cat ${TF_ROOT}/tf_output.json | jq -r .cluster_env.value) \
-              --token-auth
