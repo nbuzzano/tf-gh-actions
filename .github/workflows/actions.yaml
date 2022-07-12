@@ -83,8 +83,9 @@ jobs:
         if: github.event_name == 'pull_request'
         # quien pone contanido en TF_STATE_NAME.tfvars ??
         # falta definirlo como resource group https://docs.gitlab.com/ee/ci/resource_groups/
+        # GITLAB TIENE terraform plan -var-file=config/${TF_STATE_NAME}.tfvars
         run: |
-          terraform plan -var-file=config/${TF_STATE_NAME}.tfvars
+          terraform plan    
         continue-on-error: true
       
       - uses: actions/upload-artifact@v3
