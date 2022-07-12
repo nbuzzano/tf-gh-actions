@@ -50,14 +50,12 @@ jobs:
           sudo mv terraform /usr/local/bin/
       
       - name: Install AWS CLI
-        env:
-          APK_CACHE_DIR: "$GITHUB_WORKSPACE/.cache/apk"
-        run: | 
-          mkdir -p $APK_CACHE_DIR
-          apk add --cache-dir $APK_CACHE_DIR python3 py3-pip bash
-          pip3 install --upgrade pip
-          pip3 install awscli
-          aws --version
+        id: install-aws-cli
+        uses: unfor19/install-aws-cli-action@v1.0.3
+      
+      - name: Configure AWS CLI
+        id: configure-aws-cli
+        run : |
           aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
           aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
 
