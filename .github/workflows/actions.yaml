@@ -85,11 +85,12 @@ jobs:
         # falta definirlo como resource group https://docs.gitlab.com/ee/ci/resource_groups/
         run: |
           terraform plan -var-file=config/${TF_STATE_NAME}.tfvars
-        uses: actions/upload-artifact@v3
+        continue-on-error: true
+      
+      - uses: actions/upload-artifact@v3
         with:
           name: tf-plan-cache
           path: plan.cache
-        continue-on-error: true
 
       - name: Terraform outputs
         uses: actions/github-script@v6
