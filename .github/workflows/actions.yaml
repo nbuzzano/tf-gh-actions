@@ -1,4 +1,4 @@
-name: "Terraform"
+name: "Terraform Deploy"
 
 on:
   push:
@@ -7,24 +7,40 @@ on:
       - master
   pull_request:
 
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  # https://docs.github.com/es/actions/learn-github-actions/environment-variables
+  # https://docs.github.com/es/actions/learn-github-actions/contexts
+  PIP_CACHE_DIR: "${{ GITHUB_WORKSPACE }}/.cache/pip" # or ${{ github.workspace }} ?????
+  APK_CACHE_DIR: "${{ GITHUB_WORKSPACE }}/.cache/apk"
+  TF_PLUGIN_CACHE_DIR: "${{ GITHUB_WORKSPACE }}/.cache/terraform"
+  TF_STATE_NAME: "${{ GITHUB_REF }}" # or ${{ github.ref }} ?????
+  FLUX_VERSION: "0.26.3"
+    
 jobs:
-  terraform:
-    name: "Terraform"
+  terraform-deploy:
+    name: "Terraform deploy"
     runs-on: ubuntu-latest
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
-      # - name: Setup Terraform
-      #   uses: hashicorp/setup-terraform@v1
-        # with:
-          # terraform_version: 0.13.0:
-          # cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
-
+      # no se que tan necesario es esto, teniendo en cuenta que
+        # tengo que definir un step por cada cosa que quiero cachear
+        # en Gitlab-CI no estoy seguro que esten usando lo cacheado 
+      - name: Cache APK_CACHE_DIR
+        uses: actions/cache@v3
+        with:
+          path: $APK_CACHE_DIR
+          key: APK_CACHE_DIR
+      
+      - name: IaC scanner
+      # https://github.com/marketplace/actions/terrascan-iac-scanner
+        run: |
+          echo "run some IaC scanner, that replace kics-iac-sast in Gitlab CI"
+      
       - name: Install Terraform
         env:
           TERRAFORM_VERSION: "0.13.0"
@@ -34,8 +50,21 @@ jobs:
           unzip terraform_"$tf_version"_linux_amd64.zip
           sudo mv terraform /usr/local/bin/
       
+      - name: Install AWS CLI
+        run: | 
+          mkdir -p $APK_CACHE_DIR
+          apk add --cache-dir $APK_CACHE_DIR python3 py3-pip bash
+          pip3 install --upgrade pip
+          pip3 install awscli
+          aws --version
+          aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+          aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+
       - name: Verify Terraform version
-        run: terraform --version
+        run: | 
+          terraform --version
+          echo "${{ env.TF_STATE_NAME }}"
+          echo $TF_STATE_NAME
       
       - name: Terraform Format
         id: fmt
@@ -52,10 +81,18 @@ jobs:
       - name: Terraform Plan
         id: plan
         if: github.event_name == 'pull_request'
-        run: terraform plan -no-color -input=false
+        # quien pone contanido en TF_STATE_NAME.tfvars ??
+        # falta definirlo como resource group https://docs.gitlab.com/ee/ci/resource_groups/
+        run: |
+          terraform plan -var-file=config/${TF_STATE_NAME}.tfvars
+        uses: actions/upload-artifact@v3
+        with:
+          name: tf-plan-cache
+          path: plan.cache
         continue-on-error: true
 
-      - uses: actions/github-script@v6
+      - name: Terraform outputs
+        uses: actions/github-script@v6
         if: github.event_name == 'pull_request'
         env:
           PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
@@ -78,10 +115,33 @@ jobs:
               repo: context.repo.repo,
               body: output
             })
+      
       - name: Terraform Plan Status
         if: steps.plan.outcome == 'failure'
         run: exit 1
 
       - name: Terraform Apply
         if: github.ref == 'refs/heads/master' && github.event_name == 'push' # if: $CI_PIPELINE_SOURCE != "merge_request_event" ; when: manual
-        run: terraform apply -auto-approve -input=false
+        run: |
+          terraform apply -auto-approve -input=false
+          terraform output -json
+          terraform output -json > tf_output.json
+
+      - name: Bootstrap FluxCD
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+          kubectl version --client
+          curl -s https://fluxcd.io/install.sh | bash
+          flux -v
+          |
+            aws eks --region $(cat ${TF_ROOT}/tf_output.json | jq -r .cluster_region.value) update-kubeconfig \
+              --name $(cat ${TF_ROOT}/tf_output.json | jq -r .cluster_name.value) \
+              --alias eks-cluster
+          |
+            flux bootstrap gitlab  --context=eks-cluster \
+              --owner=$(cat ${TF_ROOT}/tf_output.json | jq -r .flux_git_owner.value) \
+              --repository=$(cat ${TF_ROOT}/tf_output.json | jq -r .flux_git_repo.value) \
+              --branch=$(cat ${TF_ROOT}/tf_output.json | jq -r .flux_git_branch.value) \
+              --path=clusters/$(cat ${TF_ROOT}/tf_output.json | jq -r .cluster_env.value) \
+              --token-auth
