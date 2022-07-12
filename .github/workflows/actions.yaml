@@ -30,7 +30,7 @@ jobs:
       - name: Cache APK_CACHE_DIR
         uses: actions/cache@v3
         env:
-          APK_CACHE_DIR: "${{ GITHUB_WORKSPACE }}/.cache/apk"
+          APK_CACHE_DIR: "$GITHUB_WORKSPACE/.cache/apk"
         with:
           path: $APK_CACHE_DIR
           key: APK_CACHE_DIR
@@ -51,7 +51,7 @@ jobs:
       
       - name: Install AWS CLI
         env:
-          APK_CACHE_DIR: "${{ GITHUB_WORKSPACE }}/.cache/apk"
+          APK_CACHE_DIR: "$GITHUB_WORKSPACE/.cache/apk"
         run: | 
           mkdir -p $APK_CACHE_DIR
           apk add --cache-dir $APK_CACHE_DIR python3 py3-pip bash
@@ -66,7 +66,7 @@ jobs:
           terraform --version
           echo "${{ env.TF_STATE_NAME }}"
           echo $TF_STATE_NAME
-          echo ${{ GITHUB_REF }}
+          echo $GITHUB_REF
       
       - name: Terraform Format
         id: fmt
