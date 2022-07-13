@@ -53,6 +53,7 @@ jobs:
           
       - name: Terraform Apply
         run: |
+          terraform init
           terraform apply -auto-approve -input=false terraform-plan-file
           terraform output -json
           terraform output -json > terraform-apply-output.json      
