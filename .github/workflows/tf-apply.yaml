@@ -50,13 +50,13 @@ jobs:
           name: terraform-plan
           # Optional, directory where to extract artifact(s), defaults to current directory
           # path: extract_here
-    
+          
       - name: Terraform Apply
         run: |
-          terraform apply -auto-approve -input=false terraform-plan
+          terraform apply -auto-approve -input=false terraform-plan-file
           terraform output -json
-          terraform output -json > terraform-apply-output.json
-
+          terraform output -json > terraform-apply-output.json      
+      
       - uses: actions/upload-artifact@v3
         with:
           name: terraform-apply-output
