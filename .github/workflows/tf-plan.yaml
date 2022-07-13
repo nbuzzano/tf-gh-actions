@@ -1,4 +1,4 @@
-name: "Terraform Deploy"
+name: "Terraform Plan"
 
 on:
   push:
@@ -76,7 +76,7 @@ jobs:
       
       - name: Terraform Validate
         id: validate
-        run: terraform validate -no-color
+        run: terraform validate
 
       - name: Terraform Plan
         id: plan
@@ -85,13 +85,16 @@ jobs:
         # falta definirlo como resource group https://docs.gitlab.com/ee/ci/resource_groups/
         # GITLAB TIENE terraform plan -var-file=config/${TF_STATE_NAME}.tfvars
         run: |
-          terraform plan    
+          terraform plan -out=terraform-plan-file
+          terraform plan -json > terraform-plan.json
         continue-on-error: true
       
       - uses: actions/upload-artifact@v3
         with:
-          name: tf-plan-cache
-          path: plan.cache
+          name: terraform-plan
+          path: |
+            terraform-plan-file
+            terraform-plan.json
 
       - name: Terraform outputs
         uses: actions/github-script@v6
@@ -121,22 +124,3 @@ jobs:
       - name: Terraform Plan Status
         if: steps.plan.outcome == 'failure'
         run: exit 1
-
-      - name: Terraform Apply
-        if: github.ref == 'refs/heads/master' && github.event_name == 'push' # if: $CI_PIPELINE_SOURCE != "merge_request_event" ; when: manual
-        run: |
-          terraform apply -auto-approve -input=false
-          terraform output -json
-          terraform output -json > tf_output.json
-          echo $(cat tf_output.json | jq -r .cluster_region.value)
-          echo $(cat tf_output.json | jq -r .cluster_name.value)
-          echo $(cat tf_output.json | jq -r .cluster_env.value)
-          cat tf_output.json
-
-      - name: Bootstrap FluxCD
-        if: github.ref == 'refs/heads/master' && github.event_name == 'push' # if: $CI_PIPELINE_SOURCE != "merge_request_event" ; when: manual
-        # borro instalacion kubectl, no se usa creo.
-        run: |
-          curl -s https://fluxcd.io/install.sh | bash
-          flux -v
-          
