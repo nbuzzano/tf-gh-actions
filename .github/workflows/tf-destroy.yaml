@@ -47,4 +47,4 @@ jobs:
       - name: Terraform Destroy
         run: |
           terraform init
-          terraform destroy terraform-plan-file
+          terraform destroy
