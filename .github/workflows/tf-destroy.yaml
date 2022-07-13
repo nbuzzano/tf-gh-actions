@@ -36,49 +36,15 @@ jobs:
           unzip terraform_"$tf_version"_linux_amd64.zip
           sudo mv terraform /usr/local/bin/
       
+      - name: Download artifact
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          workflow: tf-plan.yaml
+          workflow_conclusion: success
+          name: terraform-plan
+      
       - name: Terraform Destroy
         run: |
-          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-          install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-          kubectl version --client
-          
-          curl -s https://fluxcd.io/install.sh | bash
-          flux -v
-          
           terraform init
-          terraform output -json > tf_output.json
-          
-          export cluster_region=${{ github.event.inputs.cluster_region }}
-          export cluster_name=${{ github.event.inputs.cluster_name }}
-          export cluster_env=${{ github.event.inputs.cluster_env }}
-          
-          export cluster_exists=$(aws eks --region ${cluster_region} list-clusters | grep -c ${cluster_name})
-          |
-            if [[ ${cluster_exists} == 1 ]]
-            then 
-              aws eks --region ${cluster_region} update-kubeconfig \
-                --name ${cluster_name} \
-                --alias eks-cluster
-            fi
-          |
-            if [[ ${cluster_exists} == 1 ]]
-            then 
-              flux uninstall -s --keep-namespace
-            # elif [[ $(terraform state list | grep -c kubernetes_namespace.flux_system) != "0" ]]
-            # then
-            #   terraform state rm kubernetes_namespace.flux_system
-            fi
-          |
-            aws ec2 --region ${cluster_region} describe-instances \
-              --filters Name=instance-state-name,Values=running \
-              --filter Name=tag:kubernetes.io/cluster/${cluster_name},Values=owned \
-              --filters Name=tag-key,Values=karpenter.sh/provisioner-name \
-              --query "Reservations[*].Instances[*].InstanceId" \
-              --output text | xargs aws ec2 --region ${cluster_region} terminate-instances --instance-ids || true
-          |
-            aws resourcegroupstaggingapi --region ${cluster_region} get-resources \
-              --tag-filters Key=Environment,Values="${cluster_env}" Key=Project,Values="${cluster_name}" \
-              --resource-type-filters 'dynamodb' \
-              --query "ResourceTagMappingList[*].ResourceARN" \
-              --output text | jq -Rc 'split("/")[1]' | xargs aws dynamodb --region ${cluster_region} delete-table --table-name || true
-          terraform destroy -var-file=config/${TF_STATE_NAME}.tfvars
+          terraform apply -destroy -auto-approve -input=false terraform-plan-file
