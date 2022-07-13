@@ -16,8 +16,8 @@ env:
   FLUX_VERSION: "0.26.3"
     
 jobs:
-  terraform-deploy:
-    name: "Terraform deploy"
+  terraform-plan:
+    name: "Terraform plan"
     runs-on: ubuntu-latest
     
     steps:
@@ -86,7 +86,6 @@ jobs:
         # GITLAB TIENE terraform plan -var-file=config/${TF_STATE_NAME}.tfvars
         run: |
           terraform plan -out=terraform-plan-file
-          terraform plan -json > terraform-plan.json
         continue-on-error: true
       
       - uses: actions/upload-artifact@v3
@@ -94,7 +93,6 @@ jobs:
           name: terraform-plan
           path: |
             terraform-plan-file
-            terraform-plan.json
 
       - name: Terraform outputs
         uses: actions/github-script@v6
