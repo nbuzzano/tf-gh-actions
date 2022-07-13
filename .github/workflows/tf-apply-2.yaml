@@ -1,0 +1,44 @@
+name: "Terraform Apply-2"
+
+on: [workflow_dispatch]
+
+
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  # https://docs.github.com/es/actions/learn-github-actions/environment-variables
+  # https://docs.github.com/es/actions/learn-github-actions/contexts
+  TF_STATE_NAME: ${{ github.ref }}
+  FLUX_VERSION: "0.26.3"
+
+jobs:
+  terraform-apply-2:
+    name: "Terraform apply-2"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: terraform-plan
+    
+      - name: Terraform Apply
+        run: |
+          terraform apply -auto-approve -input=false terraform-plan
+          terraform output -json
+          terraform output -json > terraform-apply-output.json
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: terraform-apply-output
+          path: |
+            terraform-apply-output.json
+
+      - name: Bootstrap FluxCD
+        # borro instalacion kubectl, no se usa creo.
+        run: |
+          curl -s https://fluxcd.io/install.sh | bash
+          flux -v
+          
