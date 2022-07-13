@@ -26,7 +26,6 @@ jobs:
           name: terraform-plan
     
       - name: Terraform Apply
-        if: github.ref == 'refs/heads/master' && github.event_name == 'push' # if: $CI_PIPELINE_SOURCE != "merge_request_event" ; when: manual
         run: |
           terraform apply -auto-approve -input=false terraform-plan
           terraform output -json
@@ -39,7 +38,6 @@ jobs:
             terraform-apply-output.json
 
       - name: Bootstrap FluxCD
-        if: github.ref == 'refs/heads/master' && github.event_name == 'push' # if: $CI_PIPELINE_SOURCE != "merge_request_event" ; when: manual
         # borro instalacion kubectl, no se usa creo.
         run: |
           curl -s https://fluxcd.io/install.sh | bash
