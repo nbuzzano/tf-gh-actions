@@ -28,9 +28,15 @@ jobs:
       - name: Terraform Apply
         if: github.ref == 'refs/heads/master' && github.event_name == 'push' # if: $CI_PIPELINE_SOURCE != "merge_request_event" ; when: manual
         run: |
-          terraform apply -auto-approve -input=false
+          terraform apply -auto-approve -input=false terraform-plan
           terraform output -json
-          terraform output -json > tf_output.json
+          terraform output -json > terraform-apply-output.json
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: terraform-apply-output
+          path: |
+            terraform-apply-output.json
 
       - name: Bootstrap FluxCD
         if: github.ref == 'refs/heads/master' && github.event_name == 'push' # if: $CI_PIPELINE_SOURCE != "merge_request_event" ; when: manual
