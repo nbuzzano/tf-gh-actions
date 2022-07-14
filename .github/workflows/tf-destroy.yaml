@@ -45,4 +45,38 @@ jobs:
       - name: Terraform Destroy
         run: |
           terraform init
+          
+          export cluster_region=$(cat terraform-apply-output.json | jq -r .cluster_region.value)
+          export cluster_name=$(cat terraform-apply-output.json | jq -r .cluster_name.value)
+          export cluster_env=$(cat terraform-apply-output.json | jq -r .cluster_env.value)
+          export cluster_exists=$(aws eks --region ${cluster_region} list-clusters | grep -c ${cluster_name})
+
+          if [[ ${cluster_exists} == 1 ]]
+          then 
+            aws eks --region ${cluster_region} update-kubeconfig \
+              --name ${cluster_name} \
+              --alias eks-cluster
+          fi
+
+          if [[ ${cluster_exists} == 1 ]]
+          then 
+            flux uninstall -s --keep-namespace
+          # elif [[ $(terraform state list | grep -c kubernetes_namespace.flux_system) != "0" ]]
+          # then
+          #   terraform state rm kubernetes_namespace.flux_system
+          fi
+
+          aws ec2 --region ${cluster_region} describe-instances \
+            --filters Name=instance-state-name,Values=running \
+            --filter Name=tag:kubernetes.io/cluster/${cluster_name},Values=owned \
+            --filters Name=tag-key,Values=karpenter.sh/provisioner-name \
+            --query "Reservations[*].Instances[*].InstanceId" \
+            --output text | xargs aws ec2 --region ${cluster_region} terminate-instances --instance-ids || true
+
+          aws resourcegroupstaggingapi --region ${cluster_region} get-resources \
+            --tag-filters Key=Environment,Values="${cluster_env}" Key=Project,Values="${cluster_name}" \
+            --resource-type-filters 'dynamodb' \
+            --query "ResourceTagMappingList[*].ResourceARN" \
+            --output text | jq -Rc 'split("/")[1]' | xargs aws dynamodb --region ${cluster_region} delete-table --table-name || true
+          
           terraform destroy -auto-approve

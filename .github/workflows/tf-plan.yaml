@@ -13,7 +13,6 @@ env:
   # https://docs.github.com/es/actions/learn-github-actions/environment-variables
   # https://docs.github.com/es/actions/learn-github-actions/contexts
   TF_STATE_NAME: ${{ github.ref }}
-  FLUX_VERSION: "0.26.3"
     
 jobs:
   terraform-plan:
