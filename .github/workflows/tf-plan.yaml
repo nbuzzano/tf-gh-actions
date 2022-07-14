@@ -74,7 +74,7 @@ jobs:
       
       - uses: actions/upload-artifact@v3
         with:
-          name: "terraform-plan-${{ github.ref }}"
+          name: "terraform-plan-${{ github.ref_name }}"
           path: |
             terraform-plan-file
 
