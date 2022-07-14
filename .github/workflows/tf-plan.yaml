@@ -8,8 +8,6 @@ on:
   pull_request:
 
 env:
-  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   # https://docs.github.com/es/actions/learn-github-actions/environment-variables
   # https://docs.github.com/es/actions/learn-github-actions/contexts
   TF_STATE_NAME: ${{ github.ref }}
@@ -23,8 +21,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      # no se que tan necesario es esto, teniendo en cuenta que
-        # tengo que definir un step por cada cosa que quiero cachear
         # en Gitlab-CI no estoy seguro que esten usando lo cacheado 
       - name: Cache APK_CACHE_DIR
         uses: actions/cache@v3
@@ -34,10 +30,14 @@ jobs:
           path: $APK_CACHE_DIR
           key: APK_CACHE_DIR
       
-      - name: IaC scanner
-      # https://github.com/marketplace/actions/terrascan-iac-scanner
-        run: |
-          echo "run some IaC scanner, that replace kics-iac-sast in Gitlab CI"
+      - name: Run Terrascan
+        id: terrascan
+        uses: tenable/terrascan-action@main
+        with:
+          iac_type: 'terraform'
+          iac_version: 'v14'
+          policy_type: 'aws'
+          only_warn: true
       
       - name: Install Terraform
         env:
@@ -47,24 +47,7 @@ jobs:
           wget https://releases.hashicorp.com/terraform/"$tf_version"/terraform_"$tf_version"_linux_amd64.zip
           unzip terraform_"$tf_version"_linux_amd64.zip
           sudo mv terraform /usr/local/bin/
-      
-      - name: Install AWS CLI
-        id: install-aws-cli
-        uses: unfor19/install-aws-cli-action@v1.0.3
-      
-      - name: Configure AWS CLI
-        id: configure-aws-cli
-        run : |
-          aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
-          aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
 
-      - name: Verify Terraform version
-        run: | 
-          terraform --version
-          echo "${{ env.TF_STATE_NAME }}"
-          echo $TF_STATE_NAME
-          echo $GITHUB_REF
-      
       - name: Terraform Format
         id: fmt
         run: terraform fmt -check
@@ -80,9 +63,9 @@ jobs:
       - name: Terraform Plan
         id: plan
         if: github.event_name == 'pull_request'
-        # quien pone contanido en TF_STATE_NAME.tfvars ??
-        # falta definirlo como resource group https://docs.gitlab.com/ee/ci/resource_groups/
+        # quien pone contenido en TF_STATE_NAME.tfvars ??
         # GITLAB TIENE terraform plan -var-file=config/${TF_STATE_NAME}.tfvars
+        # falta definirlo como resource group https://docs.gitlab.com/ee/ci/resource_groups/
         run: |
           terraform plan -out=terraform-plan-file
         continue-on-error: true
