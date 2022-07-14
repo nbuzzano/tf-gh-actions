@@ -48,6 +48,7 @@ jobs:
           name: terraform-apply-output
           path: |
             terraform-apply-output.json
+            terraform.tfstate
 
       - name: Bootstrap FluxCD
         # borro instalacion kubectl, no se usa creo.

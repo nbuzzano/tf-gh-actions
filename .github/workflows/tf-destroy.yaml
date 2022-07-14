@@ -44,8 +44,15 @@ jobs:
           workflow_conclusion: success
           name: terraform-plan
       
+      - name: Download artifact
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          workflow: tf-apply.yaml
+          workflow_conclusion: success
+          name: terraform-apply-output
+      
       - name: Terraform Destroy
         run: |
           terraform init
-          terraform plan -destroy -out=terraform-destroy-plan
-          terraform destroy -auto-approve -input=false terraform-destroy-plan
+          terraform apply -destroy -auto-approve -input=false
