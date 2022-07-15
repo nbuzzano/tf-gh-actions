@@ -1,14 +1,15 @@
 name: "Terraform Apply"
 
-on: [workflow_dispatch]
+on: 
+  workflow_dispatch:
+    inputs:
+      artifact_name:
+        description: artifact name
+        required: true
 
 env:
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  # https://docs.github.com/es/actions/learn-github-actions/environment-variables
-  # https://docs.github.com/es/actions/learn-github-actions/contexts
-  TF_STATE_NAME: ${{ github.ref }}
-  FLUX_VERSION: "0.26.3"
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}  
 
 jobs:
   terraform-apply:
@@ -19,21 +20,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - uses: actions/download-artifact@v3
+      - name: Install Terraform
+        env:
+          TERRAFORM_VERSION: "0.13.0"
+        run: |
+          tf_version=$TERRAFORM_VERSION
+          wget https://releases.hashicorp.com/terraform/"$tf_version"/terraform_"$tf_version"_linux_amd64.zip
+          unzip terraform_"$tf_version"_linux_amd64.zip
+          sudo mv terraform /usr/local/bin/
+      
+      - name: Download artifact
+        uses: dawidd6/action-download-artifact@v2
         with:
-          name: terraform-plan
-    
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          workflow: tf-plan.yaml
+          workflow_conclusion: success
+          name: terraform-plan-${{ github.event.inputs.artifact_name }}
+          
       - name: Terraform Apply
         run: |
-          terraform apply -auto-approve -input=false terraform-plan
+          terraform init
+          terraform apply -auto-approve -input=false terraform-plan-file
           terraform output -json
-          terraform output -json > terraform-apply-output.json
-
+          terraform output -json > terraform-apply-output.json      
+      
       - uses: actions/upload-artifact@v3
         with:
-          name: terraform-apply-output
+          name: terraform-state-${{ github.event.inputs.artifact_name }}
           path: |
             terraform-apply-output.json
+            terraform.tfstate
 
       - name: Bootstrap FluxCD
         # borro instalacion kubectl, no se usa creo.
@@ -41,3 +57,13 @@ jobs:
           curl -s https://fluxcd.io/install.sh | bash
           flux -v
           
+          aws eks --region $(cat terraform-apply-output.json | jq -r .cluster_region.value) update-kubeconfig \
+            --name $(cat terraform-apply-output.json | jq -r .cluster_name.value) \
+            --alias eks-cluster
+
+          flux bootstrap gitlab  --context=eks-cluster \
+            --owner=$(cat terraform-apply-output.json | jq -r .flux_git_owner.value) \
+            --repository=$(cat terraform-apply-output.json | jq -r .flux_git_repo.value) \
+            --branch=$(cat terraform-apply-output.json | jq -r .flux_git_branch.value) \
+            --path=clusters/$(cat terraform-apply-output.json | jq -r .cluster_env.value) \
+            --token-auth
