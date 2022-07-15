@@ -1,11 +1,6 @@
 name: "Terraform Destroy"
 
-on: 
-  workflow_dispatch:
-    inputs:
-      artifact_name:
-        description: artifact name
-        required: true
+on: [workflow_dispatch] 
 
 concurrency:
   group: unique-concurrency-group
@@ -42,13 +37,18 @@ jobs:
           aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
           aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
       
+      - name: Extract branch name
+        shell: bash
+        run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+        id: extract_branch
+      
       - name: Download plan
         uses: dawidd6/action-download-artifact@v2
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
           workflow: tf-plan.yaml
           workflow_conclusion: success
-          name: terraform-plan-${{ github.event.inputs.artifact_name }}
+          name: terraform-plan-${{ steps.extract_branch.outputs.branch }}
       
       - name: Download state
         uses: dawidd6/action-download-artifact@v2
@@ -56,7 +56,7 @@ jobs:
           github_token: ${{secrets.GITHUB_TOKEN}}
           workflow: tf-apply.yaml
           workflow_conclusion: success
-          name: terraform-state-${{ github.event.inputs.artifact_name }}
+          name: terraform-state-${{ steps.extract_branch.outputs.branch }}
       
       - name: Terraform Destroy
         run: |
@@ -95,4 +95,4 @@ jobs:
             --query "ResourceTagMappingList[*].ResourceARN" \
             --output text | jq -Rc 'split("/")[1]' | xargs aws dynamodb --region ${cluster_region} delete-table --table-name || true
           
-          terraform destroy -auto-approve
+          terraform destroy -auto-approve -var-file=config/${{ steps.extract_branch.outputs.branch }}.tfvars
