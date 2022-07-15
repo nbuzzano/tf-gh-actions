@@ -1,19 +1,11 @@
 name: "Terraform Plan"
 
-on: 
-  workflow_dispatch:
-    inputs:
-      artifact_name:
-        description: artifact name
-        required: true
+on: [workflow_dispatch] 
 
 concurrency:
   group: unique-concurrency-group
 
 env:
-  # https://docs.github.com/es/actions/learn-github-actions/environment-variables
-  # https://docs.github.com/es/actions/learn-github-actions/contexts
-  TF_STATE_NAME: ${{ github.ref }}
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}  
 
@@ -70,6 +62,6 @@ jobs:
         uses: actions/upload-artifact@v3
         if: steps.plan.outcome == 'success'
         with:
-          name: terraform-plan-${{ github.event.inputs.artifact_name }}
+          name: terraform-plan-${{ steps.extract_branch.outputs.branch }}
           path: |
             terraform-plan-file

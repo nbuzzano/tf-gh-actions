@@ -1,11 +1,6 @@
 name: "Terraform Apply"
 
-on: 
-  workflow_dispatch:
-    inputs:
-      artifact_name:
-        description: artifact name
-        required: true
+on: [workflow_dispatch] 
 
 concurrency:
   group: unique-concurrency-group
@@ -32,13 +27,18 @@ jobs:
           unzip terraform_"$tf_version"_linux_amd64.zip
           sudo mv terraform /usr/local/bin/
       
+      - name: Extract branch name
+        shell: bash
+        run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+        id: extract_branch
+      
       - name: Download artifact
         uses: dawidd6/action-download-artifact@v2
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
           workflow: tf-plan.yaml
           workflow_conclusion: success
-          name: terraform-plan-${{ github.event.inputs.artifact_name }}
+          name: terraform-plan-${{ steps.extract_branch.outputs.branch }}
           
       - name: Terraform Apply
         id: apply
@@ -70,7 +70,7 @@ jobs:
       - uses: actions/upload-artifact@v3
         if: steps.apply.outcome == 'success' # and steps.bootstrap.outcome == 'success'
         with:
-          name: terraform-state-${{ github.event.inputs.artifact_name }}
+          name: terraform-state-${{ steps.extract_branch.outputs.branch }}
           path: |
             terraform-apply-output.json
             terraform.tfstate
