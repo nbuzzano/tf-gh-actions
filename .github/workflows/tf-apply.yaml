@@ -7,6 +7,9 @@ on:
         description: artifact name
         required: true
 
+concurrency:
+  group: unique-concurrency-group
+
 env:
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}  
@@ -38,20 +41,15 @@ jobs:
           name: terraform-plan-${{ github.event.inputs.artifact_name }}
           
       - name: Terraform Apply
+        id: apply
         run: |
           terraform init
           terraform apply -auto-approve -input=false terraform-plan-file
           terraform output -json
           terraform output -json > terraform-apply-output.json      
-      
-      - uses: actions/upload-artifact@v3
-        with:
-          name: terraform-state-${{ github.event.inputs.artifact_name }}
-          path: |
-            terraform-apply-output.json
-            terraform.tfstate
 
       - name: Bootstrap FluxCD
+        id: bootstrap
         # borro instalacion kubectl, no se usa creo.
         run: |
           curl -s https://fluxcd.io/install.sh | bash
@@ -67,3 +65,13 @@ jobs:
             --branch=$(cat terraform-apply-output.json | jq -r .flux_git_branch.value) \
             --path=clusters/$(cat terraform-apply-output.json | jq -r .cluster_env.value) \
             --token-auth
+        continue-on-error: true
+      
+      - uses: actions/upload-artifact@v3
+        if: steps.apply.outcome == 'success' # and steps.bootstrap.outcome == 'success'
+        with:
+          name: terraform-state-${{ github.event.inputs.artifact_name }}
+          path: |
+            terraform-apply-output.json
+            terraform.tfstate
+
