@@ -72,9 +72,13 @@ jobs:
           terraform plan -out=terraform-plan-file
         continue-on-error: true
       
+      - name: define artifact name 
+        run: |
+          ARTIFACT_NAME=`echo terraform-plan-${{ github.ref_name }} | tr / -`
+
       - uses: actions/upload-artifact@v3
         with:
-          name: echo terraform-plan-${{ github.ref_name }} | tr / -
+          name: $ARTIFACT_NAME
           path: |
             terraform-plan-file
 
