@@ -23,15 +23,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-        # en Gitlab-CI no estoy seguro que esten usando lo cacheado 
-      - name: Cache APK_CACHE_DIR
-        uses: actions/cache@v3
-        env:
-          APK_CACHE_DIR: "$GITHUB_WORKSPACE/.cache/apk"
-        with:
-          path: $APK_CACHE_DIR
-          key: APK_CACHE_DIR
-      
       - name: Run Terrascan
         id: terrascan
         uses: tenable/terrascan-action@main
