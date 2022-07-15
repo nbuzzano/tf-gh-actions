@@ -1,11 +1,11 @@
 name: "Terraform Plan"
 
-on:
-  push:
-    branches:
-      - main
-      - master
-  pull_request:
+on: 
+  workflow_dispatch:
+    inputs:
+      artifact_name:
+        description: artifact name
+        required: true
 
 env:
   # https://docs.github.com/es/actions/learn-github-actions/environment-variables
@@ -73,10 +73,8 @@ jobs:
         continue-on-error: true
       
       - uses: actions/upload-artifact@v3
-        env:
-          ARTIFACT_NAME: echo terraform-plan-${{ github.ref_name }} | tr / -
         with:
-          name: ${{ env.ARTIFACT_NAME }}'
+          name: terraform-plan-${{ github.event.inputs.artifact_name }}
           path: |
             terraform-plan-file
 
