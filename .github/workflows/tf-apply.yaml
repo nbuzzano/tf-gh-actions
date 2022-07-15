@@ -40,8 +40,10 @@ jobs:
           terraform output -json > terraform-apply-output.json      
       
       - uses: actions/upload-artifact@v3
+        env:
+          ARTIFACT_NAME: echo terraform-plan-${{ github.ref_name }} | tr / -
         with:
-          name: terraform-apply-output
+          name: $ARTIFACT_NAME
           path: |
             terraform-apply-output.json
             terraform.tfstate
