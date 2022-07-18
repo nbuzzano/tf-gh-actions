@@ -32,6 +32,15 @@ jobs:
           policy_type: 'aws'
           only_warn: true
       
+      - name: Download state
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          workflow: tf-apply.yaml
+          workflow_conclusion: success
+          name: terraform-state-${{ steps.extract_branch.outputs.branch }}
+        continue-on-error: true
+      
       - name: Install Terraform
         env:
           TERRAFORM_VERSION: "0.13.0"
@@ -41,14 +50,14 @@ jobs:
           unzip terraform_"$tf_version"_linux_amd64.zip
           sudo mv terraform /usr/local/bin/
 
-      - name: Terraform Format
-        id: fmt
-        run: terraform fmt -check
-
       - name: Terraform Init
         id: init
         run: terraform init
       
+      - name: Terraform Format
+        id: fmt
+        run: terraform fmt -check
+
       - name: Terraform Validate
         id: validate
         run: terraform validate
