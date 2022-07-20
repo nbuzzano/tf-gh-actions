@@ -27,12 +27,42 @@ jobs:
           unzip terraform_"$tf_version"_linux_amd64.zip
           sudo mv terraform /usr/local/bin/
       
-      - name: Extract branch name
+      - name: Get branch name (merge)
+        if: github.event_name != 'pull_request'
         shell: bash
-        run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
-        id: extract_branch
+        run: echo "BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/} | tr / -)" >> $GITHUB_ENV
+
+      - name: Get branch name (pull request)
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: echo "BRANCH_NAME=$(echo ${GITHUB_HEAD_REF} | tr / -)" >> $GITHUB_ENV
+
+      - name: Terraform Init
+        id: init
+        run: |
+          cat << EOF > override.tf
+          terraform {
+            backend "s3" {
+              bucket = "mybucket.tfstate"
+              key    = "${{ env.BRANCH_NAME }}"
+              region = "us-west-2"
+            }
+          }
+          EOF
+          terraform init
       
-      - name: Download artifact
+      - name: Get remote state
+        uses: dflook/terraform-remote-state@v1
+        id: remote-state
+        with:
+          backend_type: s3
+          backend_config: |
+            bucket=mybucket.tf-state
+            key=${{ env.BRANCH_NAME }}
+            region=us-west-2
+        continue-on-error: true
+      
+      - name: Download Plan
         uses: dawidd6/action-download-artifact@v2
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
@@ -43,7 +73,6 @@ jobs:
       - name: Terraform Apply
         id: apply
         run: |
-          terraform init
           terraform apply -auto-approve -input=false terraform-plan-file
           terraform output -json
           terraform output -json > terraform-apply-output.json      
@@ -65,13 +94,3 @@ jobs:
             --branch=$(cat terraform-apply-output.json | jq -r .flux_git_branch.value) \
             --path=clusters/$(cat terraform-apply-output.json | jq -r .cluster_env.value) \
             --token-auth
-        continue-on-error: true
-      
-      - uses: actions/upload-artifact@v3
-        if: steps.apply.outcome == 'success' # and steps.bootstrap.outcome == 'success'
-        with:
-          name: terraform-state-${{ steps.extract_branch.outputs.branch }}
-          path: |
-            terraform-apply-output.json
-            terraform.tfstate
-

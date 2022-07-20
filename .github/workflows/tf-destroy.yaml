@@ -37,62 +37,52 @@ jobs:
           aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
           aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
       
-      - name: Extract branch name
+      - name: Get branch name (merge)
+        if: github.event_name != 'pull_request'
         shell: bash
-        run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
-        id: extract_branch
-      
-      - name: Download plan
-        uses: dawidd6/action-download-artifact@v2
+        run: echo "BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/} | tr / -)" >> $GITHUB_ENV
+
+      - name: Get branch name (pull request)
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: echo "BRANCH_NAME=$(echo ${GITHUB_HEAD_REF} | tr / -)" >> $GITHUB_ENV
+
+      - name: Get remote state
+        uses: dflook/terraform-remote-state@v1
+        id: remote-state
         with:
-          github_token: ${{secrets.GITHUB_TOKEN}}
-          workflow: tf-plan.yaml
-          workflow_conclusion: success
-          name: terraform-plan-${{ steps.extract_branch.outputs.branch }}
+          backend_type: s3
+          backend_config: |
+            bucket=mybucket.tf-state
+            key=${{ env.BRANCH_NAME }}
+            region=us-west-2
+        continue-on-error: true
       
-      - name: Download state
-        uses: dawidd6/action-download-artifact@v2
+      - name: Terraform Init
+        id: init
+        run: |
+          cat << EOF > override.tf
+          terraform {
+            backend "s3" {
+              bucket = "mybucket.tfstate"
+              key    = "${{ env.BRANCH_NAME }}"
+              region = "us-west-2"
+            }
+          }
+          EOF
+          terraform init
+      
+      - name: Get remote state
+        uses: dflook/terraform-remote-state@v1
+        id: remote-state
         with:
-          github_token: ${{secrets.GITHUB_TOKEN}}
-          workflow: tf-apply.yaml
-          workflow_conclusion: success
-          name: terraform-state-${{ steps.extract_branch.outputs.branch }}
+          backend_type: s3
+          backend_config: |
+            bucket=mybucket.tf-state
+            key=${{ env.BRANCH_NAME }}
+            region=us-west-2
+        continue-on-error: true
       
       - name: Terraform Destroy
         run: |
-          terraform init
-          
-          export cluster_region=$(cat terraform-apply-output.json | jq -r .cluster_region.value)
-          export cluster_name=$(cat terraform-apply-output.json | jq -r .cluster_name.value)
-          export cluster_env=$(cat terraform-apply-output.json | jq -r .cluster_env.value)
-          export cluster_exists=$(aws eks --region ${cluster_region} list-clusters | grep -c ${cluster_name})
-
-          if [[ ${cluster_exists} == 1 ]]
-          then 
-            aws eks --region ${cluster_region} update-kubeconfig \
-              --name ${cluster_name} \
-              --alias eks-cluster
-          fi
-
-          if [[ ${cluster_exists} == 1 ]]
-          then 
-            flux uninstall -s --keep-namespace
-          # elif [[ $(terraform state list | grep -c kubernetes_namespace.flux_system) != "0" ]]
-          # then
-          #   terraform state rm kubernetes_namespace.flux_system
-          fi
-
-          aws ec2 --region ${cluster_region} describe-instances \
-            --filters Name=instance-state-name,Values=running \
-            --filter Name=tag:kubernetes.io/cluster/${cluster_name},Values=owned \
-            --filters Name=tag-key,Values=karpenter.sh/provisioner-name \
-            --query "Reservations[*].Instances[*].InstanceId" \
-            --output text | xargs aws ec2 --region ${cluster_region} terminate-instances --instance-ids || true
-
-          aws resourcegroupstaggingapi --region ${cluster_region} get-resources \
-            --tag-filters Key=Environment,Values="${cluster_env}" Key=Project,Values="${cluster_name}" \
-            --resource-type-filters 'dynamodb' \
-            --query "ResourceTagMappingList[*].ResourceARN" \
-            --output text | jq -Rc 'split("/")[1]' | xargs aws dynamodb --region ${cluster_region} delete-table --table-name || true
-          
-          terraform destroy -auto-approve -var-file=config/${{ steps.extract_branch.outputs.branch }}.tfvars
+          terraform destroy -auto-approve

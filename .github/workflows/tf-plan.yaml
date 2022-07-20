@@ -32,14 +32,15 @@ jobs:
           policy_type: 'aws'
           only_warn: true
       
-      - name: Download state
-        uses: dawidd6/action-download-artifact@v2
-        with:
-          github_token: ${{secrets.GITHUB_TOKEN}}
-          workflow: tf-apply.yaml
-          workflow_conclusion: success
-          name: terraform-state-${{ steps.extract_branch.outputs.branch }}
-        continue-on-error: true
+      - name: Get branch name (merge)
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: echo "BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/} | tr / -)" >> $GITHUB_ENV
+
+      - name: Get branch name (pull request)
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: echo "BRANCH_NAME=$(echo ${GITHUB_HEAD_REF} | tr / -)" >> $GITHUB_ENV
       
       - name: Install Terraform
         env:
@@ -52,8 +53,29 @@ jobs:
 
       - name: Terraform Init
         id: init
-        run: terraform init
+        run: |
+          cat << EOF > override.tf
+          terraform {
+            backend "s3" {
+              bucket = "mybucket.tfstate"
+              key    = "${{ env.BRANCH_NAME }}"
+              region = "us-west-2"
+            }
+          }
+          EOF
+          terraform init
       
+      - name: Get remote state
+        uses: dflook/terraform-remote-state@v1
+        id: remote-state
+        with:
+          backend_type: s3
+          backend_config: |
+            bucket=mybucket.tf-state
+            key=${{ env.BRANCH_NAME }}
+            region=us-west-2
+        continue-on-error: true
+
       - name: Terraform Format
         id: fmt
         run: terraform fmt -check
@@ -62,16 +84,11 @@ jobs:
         id: validate
         run: terraform validate
 
-      - name: Extract branch name
-        shell: bash
-        run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
-        id: extract_branch
-      
       - name: Terraform Plan
         id: plan
         run: |
           terraform plan -out=terraform-plan-file -var-file=config/${{ steps.extract_branch.outputs.branch }}.tfvars
-      
+
       - name: upload terraform plan
         uses: actions/upload-artifact@v3
         if: steps.plan.outcome == 'success'
