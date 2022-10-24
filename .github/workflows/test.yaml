@@ -1,0 +1,35 @@
+name: "Test Action"
+
+on:
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Log level'
+        required: true
+        default: 'warning'
+
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  test:
+    name: "Test name"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install Terraform
+        env:
+          LEVEL: ${{ inputs.logLevel }}
+        run: |
+
+          if [[ -z "${LEVEL}" ]]; then
+            echo "An Error Occurred"
+          else
+            echo "var exists"
+          fi
+          
